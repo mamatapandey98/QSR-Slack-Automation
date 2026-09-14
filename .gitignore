@@ -1,0 +1,12 @@
+node_modules/
+
+# Authenticated Vyaguta browser session. NEVER commit this — it is a live credential.
+.auth/
+storageState.json
+
+# Secrets
+.env
+
+# Generated output: dry-run reports, discovery captures, compliance reports.
+# Discovery captures can contain bearer tokens and personal data.
+out/

@@ -1,0 +1,25 @@
+{
+  "name": "qsr-slack-automation",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Monthly QSR compliance check against Vyaguta, with Slack reminders. Run manually.",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "discover": "node --env-file-if-exists=.env src/cli/discover.ts",
+    "start": "node --env-file-if-exists=.env src/cli/run.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types test/*.test.ts"
+  },
+  "dependencies": {
+    "@slack/web-api": "^7.8.0",
+    "playwright": "^1.63.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.7.0"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "projects": [
+    {
+      "name": "Example Project Alpha",
+      "id": 1234,
+      "ownerEmail": "someone@lftechnology.com"
+    },
+    {
+      "name": "Example Project Beta"
+    },
+    {
+      "name": "Retired Project",
+      "skip": true
+    }
+  ]
+}
