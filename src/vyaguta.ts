@@ -1,201 +1,332 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { z } from "zod";
-import { BASE_URL, REPO_ROOT } from "./config.ts";
+import { BASE_URL } from "./config.ts";
 import { sessionHeaders, type VyagutaSession } from "./auth.ts";
 
-const EndpointSchema = z.object({
-  path: z.string(),
-  query: z.record(z.string()).default({}),
-  fields: z.record(z.array(z.string())).default({}),
-});
+/**
+ * Vyaguta API client.
+ *
+ * Endpoints confirmed by live probing on 2026-09-14:
+ *   GET /api/teams/projects?statusIds=4,5&size=40&page=N  -> { data: [...], meta: {page,pageSize,total} }
+ *   GET /api/teams/qsrs?projectId=N                       -> { data: [...] }  (ALL months)
+ *   GET /api/teams/status-types                           -> 4 = In Progress, 5 = Lead
+ *   GET /api/core/users/:id                               -> { data: { email, ... } }
+ *
+ * Two quirks worth knowing:
+ *  - `size` is capped at 40, so the project list must be paginated.
+ *  - /api/teams/qsrs ignores year/month query params and returns every QSR for the project.
+ *    Month filtering therefore happens here, not server-side.
+ */
 
-const EndpointsFileSchema = z.object({
-  projects: EndpointSchema,
-  qsr: EndpointSchema,
-});
+/** Project status IDs. The UI's default filter is In Progress + Lead. */
+export const STATUS_IN_PROGRESS = 4;
+export const STATUS_LEAD = 5;
 
-export type EndpointConfig = z.infer<typeof EndpointSchema>;
+const PersonSchema = z
+  .object({
+    id: z.number().optional(),
+    email: z.string().optional(),
+    empId: z.string().optional(),
+    // The API is inconsistent: projects use `fullname`, QSR records use `fullName`.
+    fullname: z.string().optional(),
+    fullName: z.string().optional(),
+  })
+  .passthrough();
 
-export function loadEndpoints(): z.infer<typeof EndpointsFileSchema> {
-  const path = resolve(REPO_ROOT, "config/endpoints.json");
-  const raw: unknown = JSON.parse(readFileSync(path, "utf8"));
-  return EndpointsFileSchema.parse(raw);
-}
+const ProjectSchema = z
+  .object({
+    id: z.number(),
+    name: z.string(),
+    status: z.string().nullish(),
+    projectLeader: PersonSchema.nullish(),
+    accountManager: PersonSchema.nullish(),
+    relationshipManager: PersonSchema.nullish(),
+    latestPsr: z.object({ health: z.string().nullish() }).passthrough().nullish(),
+  })
+  .passthrough();
 
-/** A project as we care about it, normalized away from whatever Vyaguta calls its fields. */
-export type Project = {
-  id: string | undefined;
-  name: string;
-  status: string | undefined;
-  inProduction: boolean | undefined;
-  ownerEmail: string | undefined;
-  ownerName: string | undefined;
-  raw: Record<string, unknown>;
-};
+const QsrSchema = z
+  .object({
+    id: z.number(),
+    name: z.string().nullish(),
+    /** "DRAFT" | "PUBLISHED" */
+    status: z.string().nullish(),
+    projectId: z.number(),
+    /** English month name, e.g. "April". */
+    month: z.string().nullish(),
+    year: z.number().nullish(),
+    createdBy: PersonSchema.nullish(),
+    engineeringMarkedAsDone: z.boolean().nullish(),
+    codeQualityMarkedAsDone: z.boolean().nullish(),
+    qaMarkedAsDone: z.boolean().nullish(),
+    createdAt: z.string().nullish(),
+    updatedAt: z.string().nullish(),
+  })
+  .passthrough();
 
-/** A QSR submission, normalized. `raw` is what the rules module actually inspects. */
-export type QsrEntry = {
-  projectId: string | undefined;
-  projectName: string | undefined;
-  submittedBy: string | undefined;
-  submittedAt: string | undefined;
-  raw: Record<string, unknown>;
-};
-
-/** Reads a dotted path like "owner.email" out of a record. */
-function readPath(record: Record<string, unknown>, path: string): unknown {
-  let current: unknown = record;
-  for (const segment of path.split(".")) {
-    if (current === null || typeof current !== "object") return undefined;
-    current = (current as Record<string, unknown>)[segment];
-  }
-  return current;
-}
-
-/** First candidate key that yields a non-empty value. */
-function pick(record: Record<string, unknown>, candidates: string[] | undefined): unknown {
-  for (const candidate of candidates ?? []) {
-    const value = readPath(record, candidate);
-    if (value !== undefined && value !== null && value !== "") return value;
-  }
-  return undefined;
-}
-
-function asString(value: unknown): string | undefined {
-  if (value === undefined || value === null) return undefined;
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-  // Some APIs nest the human-readable value one level down, e.g. { id, name }.
-  if (typeof value === "object") {
-    const nested = (value as Record<string, unknown>)["name"];
-    if (typeof nested === "string") return nested;
-  }
-  return undefined;
-}
-
-function asBoolean(value: unknown): boolean | undefined {
-  if (typeof value === "boolean") return value;
-  if (typeof value === "string") {
-    const lower = value.toLowerCase();
-    if (["true", "yes", "y", "1", "production", "prod", "live"].includes(lower)) return true;
-    if (["false", "no", "n", "0"].includes(lower)) return false;
-  }
-  return undefined;
-}
+export type Project = z.infer<typeof ProjectSchema>;
+export type Qsr = z.infer<typeof QsrSchema>;
 
 /**
- * Vyaguta-style APIs usually wrap payloads. Unwrap the common envelopes and return the array
- * we actually want. Throws loudly rather than returning [] — an empty result silently read as
- * "everyone is compliant" is the worst way this tool could fail.
+ * The metric fields behind each section of the QSR form, from GET /api/teams/qsrs/:id.
+ *
+ * These matter because the `*MarkedAsDone` flags on the summary record are just checkboxes:
+ * Laudio's August report has every flag true while every engineering and code-quality metric
+ * is null. Completeness therefore has to be judged on actual values, not the flags.
  */
-function unwrapList(body: unknown, context: string): Record<string, unknown>[] {
-  const envelopes = ["data", "results", "content", "items", "rows"];
-  let current = body;
+export const SECTION_FIELDS = {
+  Engineering: [
+    "prSize",
+    "cycleTime",
+    "codingTime",
+    "pickupTime",
+    "reviewTime",
+    "deployFrequencyPerService",
+    "deployFrequencyDetail",
+    "leadTime",
+    "engineeringNote",
+  ],
+  "Code Quality": [
+    "testCoverage",
+    "cyclomaticComplexity",
+    "duplication",
+    "codeSmells",
+    "codeQualityNote",
+  ],
+  QA: [
+    "postProductionBugCount",
+    "softwareDefectTotalBugCount",
+    "defectRemovalEfficiency",
+    "defectLeakageRatio",
+    "regressionCount",
+    "criticalCount",
+    "majorCount",
+    "minorCount",
+    "bugSeverityTotalBugCount",
+    "bsi",
+    "qaNote",
+  ],
+} as const;
 
-  for (let depth = 0; depth < 3; depth++) {
-    if (Array.isArray(current)) {
-      return current.filter(
-        (item): item is Record<string, unknown> => item !== null && typeof item === "object",
-      );
-    }
-    if (current === null || typeof current !== "object") break;
-    const record = current as Record<string, unknown>;
-    const next = envelopes.map((key) => record[key]).find((v) => v !== undefined);
-    if (next === undefined) break;
-    current = next;
-  }
+export type SectionName = keyof typeof SECTION_FIELDS;
 
-  throw new Error(
-    `Could not find a list in the ${context} response. Got: ` +
-      `${JSON.stringify(body).slice(0, 400)}\n` +
-      `Update config/endpoints.json, or the response envelope changed.`,
-  );
+export const ALL_SECTIONS = Object.keys(SECTION_FIELDS) as SectionName[];
+
+/** True when at least one metric in the section carries a real value. */
+export function sectionHasContent(detail: Qsr, section: SectionName): boolean {
+  const record = detail as Record<string, unknown>;
+  return SECTION_FIELDS[section].some((field) => {
+    const value = record[field];
+    return value !== null && value !== undefined && value !== "";
+  });
 }
 
-function buildUrl(endpoint: EndpointConfig, vars: Record<string, string>): string {
-  const substitute = (value: string): string =>
-    value.replace(/\{(\w+)\}/g, (match, key: string) => vars[key] ?? match);
-
-  const url = new URL(substitute(endpoint.path), BASE_URL);
-  for (const [key, value] of Object.entries(endpoint.query)) {
-    url.searchParams.set(key, substitute(value));
-  }
-  return url.toString();
+export function personName(person: z.infer<typeof PersonSchema> | null | undefined): string | undefined {
+  return person?.fullname ?? person?.fullName;
 }
 
-async function apiGet(
-  session: VyagutaSession,
-  url: string,
-  context: string,
-): Promise<unknown> {
-  const res = await fetch(url, { headers: sessionHeaders(session) });
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+/** "2026-09" -> { year: 2026, monthName: "September" } */
+export function parseMonth(month: string): { year: number; monthName: string } {
+  const [yearPart, monthPart] = month.split("-");
+  const index = Number(monthPart) - 1;
+  const monthName = MONTH_NAMES[index];
+  if (!monthName || !yearPart) throw new Error(`Invalid month "${month}", expected YYYY-MM`);
+  return { year: Number(yearPart), monthName };
+}
+
+async function apiGet(session: VyagutaSession, path: string, context: string): Promise<unknown> {
+  const res = await fetch(`${BASE_URL}${path}`, { headers: sessionHeaders(session) });
 
   if (res.status === 401 || res.status === 403) {
     throw new Error(
-      `Vyaguta rejected the session (${res.status}) on ${context}. The cached session likely ` +
-        `expired — re-run with --force-login.`,
+      `Vyaguta rejected the session (${res.status}) on ${context}.\n` +
+        `The token likely expired. Run: npm run session -- --refresh`,
     );
   }
   if (!res.ok) {
-    throw new Error(`${context} failed: ${res.status} ${res.statusText} for ${url}`);
+    throw new Error(`${context} failed: ${res.status} ${res.statusText} — ${path}`);
   }
 
   const contentType = res.headers.get("content-type") ?? "";
   if (!contentType.includes("json")) {
-    // Almost always means we were bounced to an HTML login page.
+    // Usually means the request was bounced to an HTML login page.
     throw new Error(
-      `${context} returned ${contentType || "an unknown content type"} instead of JSON. ` +
-        `This usually means the request was redirected to a login page. Try --force-login.`,
+      `${context} returned ${contentType || "unknown content"} instead of JSON — likely a ` +
+        `redirect to login. Run: npm run setup`,
     );
   }
   return res.json();
 }
 
-export async function fetchProjects(session: VyagutaSession): Promise<Project[]> {
-  const endpoint = loadEndpoints().projects;
-  const url = buildUrl(endpoint, {});
-  const body = await apiGet(session, url, "project list");
-  const rows = unwrapList(body, "project list");
+const PAGE_SIZE = 40; // Hard server-side cap; larger values 400.
 
-  if (rows.length === 0) {
-    throw new Error(
-      "Vyaguta returned zero projects. Refusing to continue — this would look like full " +
-        "compliance. Check config/endpoints.json query filters.",
-    );
+/** Fetches every project matching the given status IDs, following pagination. */
+export async function fetchProjects(
+  session: VyagutaSession,
+  statusIds: number[] = [STATUS_IN_PROGRESS, STATUS_LEAD],
+): Promise<Project[]> {
+  const all: Project[] = [];
+  let page = 1;
+  let total = 0;
+
+  for (;;) {
+    const query =
+      `statusIds=${statusIds.join(",")}&size=${PAGE_SIZE}&page=${page}` +
+      `&sortBy=projectName&order=asc`;
+    const body = await apiGet(session, `/api/teams/projects?${query}`, "project list");
+    const parsed = z
+      .object({
+        data: z.array(ProjectSchema),
+        meta: z.object({ total: z.number() }).passthrough().optional(),
+      })
+      .parse(body);
+
+    total = parsed.meta?.total ?? parsed.data.length;
+    all.push(...parsed.data);
+
+    if (parsed.data.length === 0 || all.length >= total) break;
+    page++;
+    if (page > 50) break; // Paranoia: never loop forever on a misbehaving API.
   }
 
-  return rows.map((row) => ({
-    id: asString(pick(row, endpoint.fields["id"])),
-    name: asString(pick(row, endpoint.fields["name"])) ?? "<unnamed>",
-    status: asString(pick(row, endpoint.fields["status"])),
-    inProduction: asBoolean(pick(row, endpoint.fields["inProduction"])),
-    ownerEmail: asString(pick(row, endpoint.fields["ownerEmail"])),
-    ownerName: asString(pick(row, endpoint.fields["ownerName"])),
-    raw: row,
-  }));
+  if (all.length === 0) {
+    throw new Error(
+      "Vyaguta returned zero projects. Refusing to continue — an empty list would read as " +
+        "full compliance.",
+    );
+  }
+  return all;
 }
 
-/** `month` is `YYYY-MM`. */
-export async function fetchQsrEntries(
-  session: VyagutaSession,
-  month: string,
-): Promise<QsrEntry[]> {
-  const endpoint = loadEndpoints().qsr;
-  const [year, monthPart] = month.split("-");
-  const url = buildUrl(endpoint, {
-    month: monthPart ?? "",
-    year: year ?? "",
-    yearMonth: month,
-  });
-  const body = await apiGet(session, url, `QSR entries for ${month}`);
-  const rows = unwrapList(body, `QSR entries for ${month}`);
+/**
+ * Fetches every QSR for a project. The endpoint ignores year/month filters, so callers filter
+ * with `findQsrForMonth`.
+ */
+export async function fetchQsrs(session: VyagutaSession, projectId: number): Promise<Qsr[]> {
+  const body = await apiGet(
+    session,
+    `/api/teams/qsrs?projectId=${projectId}`,
+    `QSRs for project ${projectId}`,
+  );
+  return z.object({ data: z.array(QsrSchema) }).parse(body).data;
+}
 
-  return rows.map((row) => ({
-    projectId: asString(pick(row, endpoint.fields["projectId"])),
-    projectName: asString(pick(row, endpoint.fields["projectName"])),
-    submittedBy: asString(pick(row, endpoint.fields["submittedBy"])),
-    submittedAt: asString(pick(row, endpoint.fields["submittedAt"])),
-    raw: row,
-  }));
+/** Number of sign-off flags set to true. */
+function signOffCount(qsr: Qsr): number {
+  return [qsr.engineeringMarkedAsDone, qsr.codeQualityMarkedAsDone, qsr.qaMarkedAsDone].filter(
+    (flag) => flag === true,
+  ).length;
+}
+
+function timestamp(qsr: Qsr): number {
+  const raw = qsr.updatedAt ?? qsr.createdAt;
+  const parsed = raw ? Date.parse(raw) : NaN;
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+/**
+ * Finds the QSR for a month.
+ *
+ * A project can have several records for the same month — observed in production: SuperCare
+ * Health has a PUBLISHED August report plus a later empty DRAFT, and Colla Health has two
+ * near-identical drafts created a second apart. Taking the first match would report a
+ * completed month as incomplete and nag someone who had already finished.
+ *
+ * So pick the most complete record: PUBLISHED beats DRAFT, then more sign-offs, then most
+ * recently touched. This resolves ties toward "the work was done", which is the safe
+ * direction — a missed reminder is recoverable, a false accusation is not.
+ */
+export function findQsrForMonth(qsrs: Qsr[], month: string): Qsr | undefined {
+  const { year, monthName } = parseMonth(month);
+  const candidates = qsrs.filter(
+    (q) => q.year === year && q.month?.toLowerCase() === monthName.toLowerCase(),
+  );
+  if (candidates.length <= 1) return candidates[0];
+
+  return candidates.reduce((best, candidate) => {
+    const bestPublished = best.status?.toUpperCase() === "PUBLISHED";
+    const candidatePublished = candidate.status?.toUpperCase() === "PUBLISHED";
+    if (bestPublished !== candidatePublished) return candidatePublished ? candidate : best;
+
+    const diff = signOffCount(candidate) - signOffCount(best);
+    if (diff !== 0) return diff > 0 ? candidate : best;
+
+    return timestamp(candidate) > timestamp(best) ? candidate : best;
+  });
+}
+
+/** Fetches QSRs for many projects with bounded concurrency. */
+export async function fetchQsrsForProjects(
+  session: VyagutaSession,
+  projectIds: number[],
+  concurrency = 5,
+): Promise<Map<number, Qsr[]>> {
+  const result = new Map<number, Qsr[]>();
+  const queue = [...projectIds];
+
+  const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+    for (;;) {
+      const id = queue.shift();
+      if (id === undefined) return;
+      result.set(id, await fetchQsrs(session, id));
+    }
+  });
+
+  await Promise.all(workers);
+  return result;
+}
+
+/**
+ * Fetches the full QSR record, including every metric field.
+ *
+ * The list endpoint returns only a summary; the per-section metrics that completeness is
+ * actually judged on live here.
+ */
+export async function fetchQsrDetail(session: VyagutaSession, qsrId: number): Promise<Qsr> {
+  const body = await apiGet(session, `/api/teams/qsrs/${qsrId}`, `QSR ${qsrId}`);
+  // Unlike the list endpoints, this one returns the record unwrapped. Accept either shape so a
+  // future change to add the envelope doesn't break the run.
+  const unwrapped =
+    body !== null && typeof body === "object" && "data" in body
+      ? (body as { data: unknown }).data
+      : body;
+  return QsrSchema.parse(unwrapped);
+}
+
+/** Fetches details for many QSRs with bounded concurrency. */
+export async function fetchQsrDetails(
+  session: VyagutaSession,
+  qsrIds: number[],
+  concurrency = 5,
+): Promise<Map<number, Qsr>> {
+  const result = new Map<number, Qsr>();
+  const queue = [...qsrIds];
+  const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+    for (;;) {
+      const id = queue.shift();
+      if (id === undefined) return;
+      result.set(id, await fetchQsrDetail(session, id));
+    }
+  });
+  await Promise.all(workers);
+  return result;
+}
+
+/** Resolves a user's email from /api/core/users/:id. Only needed when a record lacks one. */
+export async function fetchUserEmail(
+  session: VyagutaSession,
+  userId: number,
+): Promise<string | undefined> {
+  try {
+    const body = await apiGet(session, `/api/core/users/${userId}`, `user ${userId}`);
+    return z
+      .object({ data: z.object({ email: z.string().optional() }).passthrough() })
+      .parse(body).data.email;
+  } catch {
+    return undefined;
+  }
 }

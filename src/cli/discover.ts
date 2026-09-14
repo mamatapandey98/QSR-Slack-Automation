@@ -13,9 +13,11 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
+import { existsSync } from "node:fs";
 import type { Response } from "playwright";
-import { BASE_URL, OUT_DIR } from "../config.ts";
-import { getSession } from "../auth.ts";
+import { BASE_URL, OUT_DIR, PROFILE_DIR } from "../config.ts";
+import { captureCredentials, openProfile, primeSession, saveSession } from "../auth.ts";
+import { runCli } from "./shared.ts";
 
 type CapturedCall = {
   method: string;
@@ -76,60 +78,79 @@ async function main(): Promise<void> {
   const calls: CapturedCall[] = [];
   const seen = new Set<string>();
 
-  await getSession({
-    forceLogin: process.argv.includes("--force-login"),
-    onContext: async (context, browser) => {
-      const onResponse = async (res: Response): Promise<void> => {
-        const req = res.request();
-        const url = res.url();
-        if (!url.startsWith(BASE_URL)) return;
-        const type = req.resourceType();
-        if (type !== "xhr" && type !== "fetch") return;
+  if (!existsSync(PROFILE_DIR)) {
+    throw new Error("No saved browser profile. Run `npm run setup` first.");
+  }
 
-        const contentType = (await res.headerValue("content-type")) ?? "";
-        if (!contentType.includes("json")) return;
+  // Visible browser, using the already-signed-in profile: you click, we record.
+  const context = await openProfile({ headless: false });
 
-        let body: unknown;
-        try {
-          body = await res.json();
-        } catch {
-          return; // Body already consumed or not parseable — nothing useful to record.
-        }
+  const onResponse = async (res: Response): Promise<void> => {
+    const req = res.request();
+    const url = res.url();
+    if (!url.startsWith(BASE_URL)) return;
+    const type = req.resourceType();
+    if (type !== "xhr" && type !== "fetch") return;
 
-        const parsed = new URL(url);
-        // Dedupe on method + path so clicking through 10 projects does not yield 10 entries.
-        const key = `${req.method()} ${parsed.pathname}`;
-        if (seen.has(key)) return;
-        seen.add(key);
+    const contentType = (await res.headerValue("content-type").catch(() => "")) ?? "";
+    if (!contentType.includes("json")) return;
 
-        calls.push({
-          method: req.method(),
-          url,
-          path: parsed.pathname,
-          query: Object.fromEntries(parsed.searchParams),
-          status: res.status(),
-          requestHeaders: redactHeaders(await req.allHeaders()),
-          responseShape: shapeOf(body),
-          responseSample: trimSample(body),
-        });
-        console.log(`  captured  ${key}`);
-      };
+    let body: unknown;
+    try {
+      body = await res.json();
+    } catch {
+      return; // Body already consumed or not parseable — nothing useful to record.
+    }
 
-      context.on("response", (res) => void onResponse(res));
+    const parsed = new URL(url);
+    // Dedupe on method + path so clicking through 10 projects does not yield 10 entries.
+    const key = `${req.method()} ${parsed.pathname}`;
+    if (seen.has(key)) return;
+    seen.add(key);
 
-      console.log("Recording API calls. In the browser window, please:");
-      console.log("  1. Open the projects list you filter by (statusIds=4,5).");
-      console.log("  2. Open the QSR report for the current month.");
-      console.log("  3. Open one project that IS filled, and one that is NOT.");
-      console.log("  4. Open a project detail page so we can see the owner/manager fields.\n");
+    calls.push({
+      method: req.method(),
+      url,
+      path: parsed.pathname,
+      query: Object.fromEntries(parsed.searchParams),
+      status: res.status(),
+      requestHeaders: redactHeaders(await req.allHeaders().catch(() => ({}))),
+      responseShape: shapeOf(body),
+      responseSample: trimSample(body),
+    });
+    console.log(`  captured  ${key}`);
+  };
 
-      const rl = createInterface({ input: process.stdin, output: process.stdout });
-      await rl.question("Press Enter here when you are done clicking around… ");
-      rl.close();
+  context.on("response", (res) => void onResponse(res));
 
-      await browser.close().catch(() => {});
-    },
+  // Opportunistically refresh the cached token while we are here.
+  const capture = captureCredentials(context, 60_000);
+  await primeSession(context);
+  void capture.then((session) => {
+    if (session) saveSession(session);
   });
+
+  console.log("Recording API calls. In the browser window, please:");
+  console.log("  1. Open the projects list you filter by (statusIds=4,5).");
+  console.log("  2. Open the QSR report for the current month.");
+  console.log("  3. Open one project that IS filled, and one that is NOT.");
+  console.log("  4. Open a project detail page so we can see the owner/manager fields.\n");
+
+  // Finish on whichever comes first: Enter in the terminal, or the browser window being
+  // closed. The close path matters when this runs without an attached TTY.
+  const closed = new Promise<void>((resolve) => context.once("close", () => resolve()));
+
+  if (process.stdin.isTTY) {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    console.log("Close the browser window when you're done (or press Enter here).\n");
+    await Promise.race([rl.question(""), closed]);
+    rl.close();
+  } else {
+    console.log("Close the browser window when you're done clicking around.\n");
+    await closed;
+  }
+
+  await context.close().catch(() => {});
 
   mkdirSync(OUT_DIR, { recursive: true });
   const target = resolve(OUT_DIR, "api-discovery.json");
@@ -144,4 +165,4 @@ async function main(): Promise<void> {
   }
 }
 
-await main();
+await runCli(main);

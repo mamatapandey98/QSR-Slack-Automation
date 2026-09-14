@@ -1,14 +1,17 @@
 import type { ProjectConfig } from "./config.ts";
-import type { Project, QsrEntry } from "./vyaguta.ts";
+import { ALL_SECTIONS, personName, type Project, type Qsr } from "./vyaguta.ts";
 import { evaluate, needsReminder, type Evaluation } from "./rules.ts";
 
 export type ProjectResult = {
   configuredName: string;
   project: Project | undefined;
-  entry: QsrEntry | undefined;
+  entry: Qsr | undefined;
   evaluation: Evaluation;
+  /** From config only — Vyaguta has no production field. Undefined means "not recorded". */
   inProduction: boolean | undefined;
-  /** Who should be nudged. Config wins over whatever Vyaguta reports. */
+  /** Sections this project is expected to report on. */
+  requiredSections: readonly string[];
+  /** Who to nudge: config override first, then the project leader. */
   ownerEmail: string | undefined;
   ownerName: string | undefined;
   needsReminder: boolean;
@@ -19,45 +22,38 @@ function normalize(name: string): string {
 }
 
 /** Matches a configured project to a Vyaguta project by ID first, then by normalized name. */
-function findProject(
+export function findProject(
   configured: ProjectConfig,
   projects: Project[],
 ): Project | undefined {
   if (configured.id !== undefined) {
-    const byId = projects.find((p) => p.id === String(configured.id));
+    const byId = projects.find((p) => p.id === Number(configured.id));
     if (byId) return byId;
   }
   return projects.find((p) => normalize(p.name) === normalize(configured.name));
 }
 
-function findEntry(project: Project | undefined, entries: QsrEntry[]): QsrEntry | undefined {
-  if (!project) return undefined;
-  if (project.id !== undefined) {
-    const byId = entries.find((e) => e.projectId === project.id);
-    if (byId) return byId;
-  }
-  return entries.find(
-    (e) => e.projectName !== undefined && normalize(e.projectName) === normalize(project.name),
-  );
-}
-
 export function classify(
   configured: ProjectConfig[],
   projects: Project[],
-  entries: QsrEntry[],
+  qsrsByProject: Map<number, Qsr | undefined>,
 ): ProjectResult[] {
   return configured.map((cfg) => {
     const project = findProject(cfg, projects);
-    const entry = findEntry(project, entries);
+    const entry = project ? qsrsByProject.get(project.id) : undefined;
 
-    // A configured project we cannot find in Vyaguta is a config or endpoint problem, not
-    // compliance data. Surface it as UNKNOWN so it shows up rather than passing silently.
+    // A configured project missing from Vyaguta is a config problem, not compliance data.
+    // Surface it as UNKNOWN so it is visible rather than silently passing.
     const evaluation: Evaluation = project
-      ? evaluate(entry, project)
+      ? evaluate(entry, cfg.requiredSections ?? ALL_SECTIONS)
       : {
           status: "UNKNOWN",
+          reason: "NOT_FOUND",
           missingFields: [],
-          issues: [`Project "${cfg.name}" was not found in the Vyaguta project list`],
+          pendingSections: [],
+          issues: [
+            `Project "${cfg.name}" was not found in Vyaguta — check the name in config/projects.json`,
+          ],
         };
 
     return {
@@ -65,22 +61,17 @@ export function classify(
       project,
       entry,
       evaluation,
-      inProduction: project?.inProduction,
-      ownerEmail: cfg.ownerEmail ?? project?.ownerEmail,
-      ownerName: project?.ownerName,
+      inProduction: cfg.inProduction,
+      requiredSections: cfg.requiredSections ?? ALL_SECTIONS,
+      ownerEmail: cfg.ownerEmail ?? project?.projectLeader?.email,
+      ownerName: personName(project?.projectLeader),
       needsReminder: project !== undefined && needsReminder(evaluation.status),
     };
   });
 }
 
 export function summarize(results: ProjectResult[]): Record<string, number> {
-  const counts: Record<string, number> = {
-    FILLED: 0,
-    PARTIAL: 0,
-    INVALID: 0,
-    MISSING: 0,
-    UNKNOWN: 0,
-  };
+  const counts: Record<string, number> = { FILLED: 0, PARTIAL: 0, MISSING: 0, UNKNOWN: 0 };
   for (const result of results) {
     counts[result.evaluation.status] = (counts[result.evaluation.status] ?? 0) + 1;
   }

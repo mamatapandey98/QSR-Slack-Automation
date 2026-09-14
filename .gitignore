@@ -1,8 +1,7 @@
 node_modules/
 
-# Authenticated Vyaguta browser session. NEVER commit this — it is a live credential.
+# Signed-in Chrome profile + captured API token. NEVER commit — these are live credentials.
 .auth/
-storageState.json
 
 # Secrets
 .env

@@ -1,16 +1,18 @@
 {
+  "_comment": [
+    "The projects that owe a monthly QSR. Only these are checked.",
+    "name         must match the Vyaguta project name (case/whitespace insensitive).",
+    "id           optional but preferred — exact match, survives renames.",
+    "ownerEmail       optional — defaults to the project's projectLeader in Vyaguta.",
+    "inProduction     optional — informational only; Vyaguta does not record this.",
+    "requiredSections optional — array of ['Engineering', 'Code Quality', 'QA']. Defaults to all three.",
+    "skip             optional — exclude without deleting the entry."
+  ],
   "projects": [
-    {
-      "name": "Example Project Alpha",
-      "id": 1234,
-      "ownerEmail": "someone@lftechnology.com"
-    },
-    {
-      "name": "Example Project Beta"
-    },
-    {
-      "name": "Retired Project",
-      "skip": true
-    }
+    { "name": "Addy X/Addy Healthcare", "id": 344, "inProduction": true },
+    { "name": "First Help Financial", "id": 3 },
+    { "name": "BuildWitt General QA", "id": 425, "requiredSections": ["QA"] },
+    { "name": "Laudio", "id": 14, "ownerEmail": "someone.else@lftechnology.com" },
+    { "name": "Vyaguta", "id": 1, "skip": true }
   ]
 }

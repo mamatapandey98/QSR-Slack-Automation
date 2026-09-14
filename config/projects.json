@@ -1,0 +1,283 @@
+{
+  "_comment": [
+    "GENERATED STARTER. Delete the projects that do NOT owe a QSR.",
+    "Set inProduction true/false. Set ownerEmail only to override the project leader."
+  ],
+  "projects": [
+    {
+      "name": "Addy X/Addy Healthcare",
+      "id": 344,
+      "leaderForReference": "shuvangijoshi@lftechnology.com",
+      "skip": true
+    },
+    {
+      "name": "Adhyayan",
+      "id": 224,
+      "leaderForReference": "loonibhatuladhar@lftechnology.com",
+      "skip": true
+    },
+    {
+      "name": "AI - Center of Excellence",
+      "id": 370,
+      "leaderForReference": "shuvangijoshi@lftechnology.com",
+      "skip": true
+    },
+    {
+      "name": "Amazon-TeleGeography",
+      "id": 315,
+      "leaderForReference": "sandriyamalla@lftechnology.com"
+    },
+    {
+      "name": "Avia Healthcare Innovation",
+      "id": 211,
+      "leaderForReference": "shuvamdhakal@lftechnology.com",
+      "skip": true
+    },
+    {
+      "name": "AWS Partner Program",
+      "id": 333,
+      "leaderForReference": "ypradhan@lftechnology.com",
+      "skip": true
+    },
+    {
+      "name": "Buddica",
+      "id": 427,
+      "leaderForReference": "krishudhakal@lftechnology.com"
+    },
+    {
+      "name": "BuildWitt FieldTime",
+      "id": 424,
+      "leaderForReference": "ritumaharjan@lftechnology.com"
+    },
+    {
+      "name": "BuildWitt General QA",
+      "id": 425,
+      "leaderForReference": "ritumaharjan@lftechnology.com",
+      "requiredSections": [
+        "QA"
+      ]
+    },
+    {
+      "name": "Colla Health",
+      "id": 366,
+      "leaderForReference": "krishudhakal@lftechnology.com"
+    },
+    {
+      "name": "DocVocate",
+      "id": 186,
+      "leaderForReference": "shuvamdhakal@lftechnology.com"
+    },
+    {
+      "name": "Eduphoric-RDH (Regional Data Hub)",
+      "id": 368,
+      "leaderForReference": "sushantmaharjan@lftechnology.com",
+      "requiredSections": [
+        "Engineering",
+        "Code Quality"
+      ]
+    },
+    {
+      "name": "Evoke Medical Care",
+      "id": 288,
+      "leaderForReference": "santoshadhikari@lftechnology.com"
+    },
+    {
+      "name": "Farmers Edge",
+      "id": 389,
+      "leaderForReference": "shristikhayargoli@lftechnology.com",
+      "skip": true
+    },
+    {
+      "name": "First Help Financial",
+      "id": 3,
+      "leaderForReference": "pratigyabasnet@lftechnology.com"
+    },
+    {
+      "name": "Fujifilm Sonosite",
+      "id": 352,
+      "leaderForReference": "aarjanrajlawot@lftechnology.com",
+      "skip": true
+    },
+    {
+      "name": "FVC: Global to Global ",
+      "id": 411,
+      "leaderForReference": "pragyagyawali@lftechnology.com"
+    },
+    {
+      "name": "Inciteful Games (eATLAS)",
+      "id": 193,
+      "leaderForReference": "aarjanrajlawot@lftechnology.com",
+      "skip": true
+    },
+    {
+      "name": "Inpart AI App",
+      "id": 430,
+      "leaderForReference": "pragyagyawali@lftechnology.com"
+    },
+    {
+      "name": "Inpart Assess",
+      "id": 388,
+      "leaderForReference": "sahajaphuyal@lftechnology.com"
+    },
+    {
+      "name": "Inpart Data ",
+      "id": 434,
+      "leaderForReference": "sahajaphuyal@lftechnology.com",
+      "skip": true
+    },
+    {
+      "name": "Inpart Explore Maintenance and Support",
+      "id": 356,
+      "leaderForReference": "sahajaphuyal@lftechnology.com",
+      "skip": true
+    },
+    {
+      "name": "Inpart Gmail Add-on",
+      "id": 414,
+      "leaderForReference": "sahajaphuyal@lftechnology.com"
+    },
+    {
+      "name": "Inpart Nexus",
+      "id": 386,
+      "leaderForReference": "bishakamaharjan@lftechnology.com",
+      "skip": true
+    },
+    {
+      "name": "Keller (Hayward Baker)",
+      "id": 11,
+      "leaderForReference": "shristikhayargoli@lftechnology.com",
+      "skip": true
+    },
+    {
+      "name": "Komodo Health",
+      "id": 357,
+      "leaderForReference": "aarjanrajlawot@lftechnology.com",
+      "skip": true
+    },
+    {
+      "name": "Laudio",
+      "id": 14,
+      "leaderForReference": "ypradhan@lftechnology.com",
+      "requiredSections": [
+        "QA"
+      ]
+    },
+    {
+      "name": "League",
+      "id": 346,
+      "leaderForReference": "shristikhayargoli@lftechnology.com",
+      "skip": true
+    },
+    {
+      "name": "Leapfrog Connect",
+      "id": 363,
+      "leaderForReference": "ankurbinadi@lftechnology.com",
+      "skip": true
+    },
+    {
+      "name": "Leapfrog Website",
+      "id": 321,
+      "leaderForReference": "sunnymahat@lftechnology.com",
+      "skip": true
+    },
+    {
+      "name": "LG CNS",
+      "id": 277,
+      "leaderForReference": "matteoraviglione@lftechnology.com",
+      "skip": true
+    },
+    {
+      "name": "LIKA",
+      "id": 436,
+      "leaderForReference": "ypradhan@lftechnology.com",
+      "skip": true
+    },
+    {
+      "name": "Ocean Finance",
+      "id": 398,
+      "leaderForReference": "shuvamdhakal@lftechnology.com",
+      "skip": true
+    },
+    {
+      "name": "Phil",
+      "id": 18,
+      "leaderForReference": "pratigyabasnet@lftechnology.com",
+      "skip": true
+    },
+    {
+      "name": "Ping Identity",
+      "id": 42,
+      "leaderForReference": "aarjanrajlawot@lftechnology.com"
+    },
+    {
+      "name": "Power Electronics",
+      "id": 362,
+      "leaderForReference": "nitishmaharjan@lftechnology.com"
+    },
+    {
+      "name": "Returnalyze",
+      "id": 182,
+      "leaderForReference": "krishudhakal@lftechnology.com",
+      "skip": true
+    },
+    {
+      "name": "Second Look (Mend.AI)",
+      "id": 350,
+      "leaderForReference": "pratigyathapa@lftechnology.com"
+    },
+    {
+      "name": "Security and Compliance",
+      "id": 307,
+      "leaderForReference": "suruchishrestha@lftechnology.com",
+      "skip": true
+    },
+    {
+      "name": "Signetic",
+      "id": 231,
+      "leaderForReference": "sunamratasubba@lftechnology.com"
+    },
+    {
+      "name": "Soliish",
+      "id": 311,
+      "leaderForReference": "sauravpokhrel@lftechnology.com",
+      "skip": true
+    },
+    {
+      "name": "Spencer Trask & Co.",
+      "id": 405,
+      "leaderForReference": "prakritituladhar@lftechnology.com",
+      "skip": true
+    },
+    {
+      "name": "StayNTouch",
+      "id": 237,
+      "leaderForReference": "shuvamdhakal@lftechnology.com",
+      "skip": true
+    },
+    {
+      "name": "SuperCare Health",
+      "id": 195,
+      "leaderForReference": "sauravpokhrel@lftechnology.com"
+    },
+    {
+      "name": "Think Money",
+      "id": 422,
+      "leaderForReference": "ericajoshi@lftechnology.com",
+      "skip": true
+    },
+    {
+      "name": "Trayt.Health",
+      "id": 185,
+      "leaderForReference": "aakrititiwari@lftechnology.com",
+      "requiredSections": [
+        "Code Quality",
+        "QA"
+      ]
+    },
+    {
+      "name": "Vyaguta",
+      "id": 1,
+      "leaderForReference": "deepangiri@lftechnology.com"
+    }
+  ]
+}

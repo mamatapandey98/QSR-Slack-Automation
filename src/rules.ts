@@ -1,103 +1,122 @@
 /**
  * QSR completeness rules.
  *
- * ============================ THIS IS THE FILE YOU EDIT ============================
- * Right now this only distinguishes "an entry exists" from "it doesn't". When you paste the
- * real completeness criteria, express them as entries in REQUIRED_FIELDS and CROSS_CHECKS
- * below — nothing else in the codebase should need to change.
- * ==================================================================================
+ * Two facts about Vyaguta drive the whole design:
+ *
+ *  1. A report cannot be published until all three `*MarkedAsDone` flags are ticked. So every
+ *     PUBLISHED record has all three true by construction — the flags carry no information
+ *     about whether anything was actually filled in.
+ *  2. Teams tick the box for sections they do not report on. Laudio publishes monthly with
+ *     every engineering and code-quality metric null.
+ *
+ * Completeness is therefore judged on real metric values, and only for the sections a given
+ * project is expected to report (derived from its own published history — see
+ * `requiredSections` in config/projects.json).
  */
-import type { Project, QsrEntry } from "./vyaguta.ts";
+import { ALL_SECTIONS, sectionHasContent, type Qsr, type SectionName } from "./vyaguta.ts";
 
 export type QsrStatus =
-  /** Entry exists and passes every rule. */
+  /** Published, with content in every section this project is expected to report. */
   | "FILLED"
-  /** Entry exists but required fields are empty. */
+  /** Exists but unpublished, or published with an expected section left empty. */
   | "PARTIAL"
-  /** Entry exists, fields are populated, but a consistency rule failed. */
-  | "INVALID"
-  /** No entry at all for this project/month. */
+  /** No QSR at all for this project/month. */
   | "MISSING"
   /** We could not tell. Never treated as compliant. */
   | "UNKNOWN";
 
+/**
+ * Why a QSR is not complete. Distinguishes cases that need materially different reminders:
+ * "you haven't started" reads very differently from "you're done, just hit publish".
+ */
+export type Reason =
+  | "NOT_STARTED"
+  /** Draft, with sections still to be ticked. */
+  | "DRAFT_SECTIONS_PENDING"
+  /** Draft, everything ticked, just not published. */
+  | "DRAFT_UNPUBLISHED"
+  /** Published, but an expected section has no data. */
+  | "PUBLISHED_DATA_MISSING"
+  | "COMPLETE"
+  | "NOT_FOUND";
+
 export type Evaluation = {
   status: QsrStatus;
+  reason: Reason;
+  /** Expected sections with no data, named as they appear on the form. */
   missingFields: string[];
+  /** Sections not yet marked done (only meaningful for drafts). */
+  pendingSections: string[];
   issues: string[];
 };
 
-/**
- * Fields that must be present and non-empty on a QSR entry.
- * `key` is looked up on the raw entry (dotted paths allowed); `label` is what the person sees
- * in their Slack reminder, so write it the way the Vyaguta form labels it.
- *
- * TODO: replace with the real required-field list.
- */
-const REQUIRED_FIELDS: { key: string; label: string }[] = [
-  // { key: "overallStatus", label: "Overall status" },
-  // { key: "risks",         label: "Risks & mitigation" },
-  // { key: "clientFeedback", label: "Client feedback" },
-];
-
-/**
- * Consistency rules that look at the entry and the project together. Return a human-readable
- * problem string, or null if the rule passes.
- *
- * TODO: add the real cross-checks. The in-production example is a placeholder showing shape.
- */
-const CROSS_CHECKS: { name: string; check: (entry: QsrEntry, project: Project) => string | null }[] =
-  [
-    // {
-    //   name: "prod-requires-release-notes",
-    //   check: (entry, project) =>
-    //     project.inProduction && isEmpty(readPath(entry.raw, "releaseNotes"))
-    //       ? "Project is in production but 'Release notes' is empty"
-    //       : null,
-    // },
-  ];
-
-export function readPath(record: Record<string, unknown>, path: string): unknown {
-  let current: unknown = record;
-  for (const segment of path.split(".")) {
-    if (current === null || typeof current !== "object") return undefined;
-    current = (current as Record<string, unknown>)[segment];
-  }
-  return current;
-}
-
-export function isEmpty(value: unknown): boolean {
-  if (value === undefined || value === null) return true;
-  if (typeof value === "string") return value.trim() === "";
-  if (Array.isArray(value)) return value.length === 0;
-  if (typeof value === "object") return Object.keys(value).length === 0;
-  return false;
-}
-
-export function evaluate(entry: QsrEntry | undefined, project: Project): Evaluation {
+export function evaluate(
+  entry: Qsr | undefined,
+  requiredSections: SectionName[] = ALL_SECTIONS,
+): Evaluation {
   if (!entry) {
-    return { status: "MISSING", missingFields: [], issues: [] };
+    return {
+      status: "MISSING",
+      reason: "NOT_STARTED",
+      missingFields: [],
+      pendingSections: [],
+      issues: [],
+    };
   }
 
-  const missingFields = REQUIRED_FIELDS.filter(({ key }) => isEmpty(readPath(entry.raw, key))).map(
-    ({ label }) => label,
-  );
+  const isPublished = entry.status?.toUpperCase() === "PUBLISHED";
+  const issues: string[] = [];
 
-  const issues = CROSS_CHECKS.map(({ check }) => check(entry, project)).filter(
-    (issue): issue is string => issue !== null,
-  );
+  if (!isPublished) {
+    // Unpublished is incomplete regardless of content. Report which sections are still
+    // unticked, since that is what actually blocks publishing.
+    const unticked = ALL_SECTIONS.filter((section) => !isMarkedDone(entry, section));
+    issues.push(
+      unticked.length > 0
+        ? `Still a draft — not yet marked done: ${unticked.join(", ")}`
+        : "All sections are marked done, but the report has not been published yet",
+    );
+    return {
+      status: "PARTIAL",
+      reason: unticked.length > 0 ? "DRAFT_SECTIONS_PENDING" : "DRAFT_UNPUBLISHED",
+      missingFields: [],
+      pendingSections: unticked,
+      issues,
+    };
+  }
 
-  if (missingFields.length > 0) return { status: "PARTIAL", missingFields, issues };
-  if (issues.length > 0) return { status: "INVALID", missingFields, issues };
-  return { status: "FILLED", missingFields: [], issues: [] };
+  const missingFields = requiredSections
+    .filter((section) => !sectionHasContent(entry, section))
+    .map((section) => `${section} metrics`);
+
+  if (missingFields.length > 0) {
+    return {
+      status: "PARTIAL",
+      reason: "PUBLISHED_DATA_MISSING",
+      missingFields,
+      pendingSections: [],
+      issues,
+    };
+  }
+  return {
+    status: "FILLED",
+    reason: "COMPLETE",
+    missingFields: [],
+    pendingSections: [],
+    issues: [],
+  };
+}
+
+function isMarkedDone(entry: Qsr, section: SectionName): boolean {
+  const key = {
+    Engineering: "engineeringMarkedAsDone",
+    "Code Quality": "codeQualityMarkedAsDone",
+    QA: "qaMarkedAsDone",
+  }[section];
+  return (entry as Record<string, unknown>)[key] === true;
 }
 
 /** True when the project owner should be nudged. */
 export function needsReminder(status: QsrStatus): boolean {
   return status !== "FILLED";
-}
-
-/** Whether any real completeness rules are configured yet. */
-export function rulesConfigured(): boolean {
-  return REQUIRED_FIELDS.length > 0 || CROSS_CHECKS.length > 0;
 }

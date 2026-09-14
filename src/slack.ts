@@ -75,33 +75,106 @@ export async function resolveRecipients(
 const STATUS_LABEL: Record<string, string> = {
   MISSING: "not filled",
   PARTIAL: "incomplete",
-  INVALID: "needs correction",
   UNKNOWN: "could not be verified",
 };
 
-export function renderMessage(recipient: Recipient, month: string): string {
-  const lines: string[] = [
-    `Hi! A quick nudge about the *${month}* QSR report.`,
-    "",
-    `The following ${recipient.results.length === 1 ? "project needs" : "projects need"} your attention:`,
-    "",
+/** "2026-08" -> "August 2026", which reads better in a message than an ISO month. */
+function friendlyMonth(month: string): string {
+  const [year, monthPart] = month.split("-");
+  const names = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
   ];
+  return `${names[Number(monthPart) - 1] ?? month} ${year}`;
+}
 
-  for (const result of recipient.results) {
-    const label = STATUS_LABEL[result.evaluation.status] ?? result.evaluation.status;
-    const prodTag = result.inProduction ? " _(in production)_" : "";
-    lines.push(`• *${result.project?.name ?? result.configuredName}* — ${label}${prodTag}`);
-    for (const field of result.evaluation.missingFields) {
-      lines.push(`    ◦ Missing: ${field}`);
-    }
-    for (const issue of result.evaluation.issues) {
-      lines.push(`    ◦ ${issue}`);
+/** Headline and follow-up detail for one project, chosen by why it is incomplete. */
+function describe(result: ProjectResult): { headline: string; detail: string[] } {
+  const { reason, pendingSections, missingFields } = result.evaluation;
+  switch (reason) {
+    case "NOT_STARTED":
+      return { headline: "not started", detail: ["Could you create and publish it?"] };
+    case "DRAFT_UNPUBLISHED":
+      return {
+        headline: "draft, not published",
+        detail: ["Everything is marked done — it just needs publishing."],
+      };
+    case "DRAFT_SECTIONS_PENDING":
+      return {
+        headline: "still a draft",
+        detail: [`Still to be marked done: ${pendingSections.join(", ")}`],
+      };
+    case "PUBLISHED_DATA_MISSING":
+      return {
+        headline: "published, but some metrics are empty",
+        detail: [`Empty: ${missingFields.join(", ")}`],
+      };
+    default:
+      return { headline: STATUS_LABEL[result.evaluation.status] ?? "needs attention", detail: [] };
+  }
+}
+
+/**
+ * Round 1: a channel announcement on the 1st.
+ *
+ * Deliberately names nobody. The month has only just ended and almost nothing is filled yet,
+ * so a roster on day one would list nearly everyone and read as an accusation rather than a
+ * heads-up. Naming starts at round 2, and only in private DMs.
+ */
+export function renderAnnouncement(
+  month: string,
+  projectCount: number,
+  deadline: string,
+): string {
+  return [
+    `:calendar: *${friendlyMonth(month)} QSR is now due.*`,
+    "",
+    `Please complete and *publish* the QSR for your project — ${projectCount} projects are ` +
+      `expected this month.`,
+    `Final reminder goes out on *${deadline}*.`,
+    "",
+    `${BASE_URL}/teams/projects/list`,
+    "_Automated reminder. Reply here if something looks wrong._",
+  ].join("\n");
+}
+
+export function renderMessage(
+  recipient: Recipient,
+  month: string,
+  round?: 1 | 2 | 3,
+): string {
+  const when = friendlyMonth(month);
+  const lines: string[] = [];
+
+  if (recipient.results.length === 1) {
+    // Single project reads better as a sentence than as a one-item bullet list.
+    const result = recipient.results[0];
+    if (!result) return "";
+    const { headline, detail } = describe(result);
+    const name = result.project?.name.trim() ?? result.configuredName;
+    const prodTag = result.inProduction ? " (in production)" : "";
+    lines.push(`Hi! The *${when}* QSR for *${name}*${prodTag} is ${headline}.`, "");
+    lines.push(...detail);
+  } else {
+    lines.push(`Hi! A few things on the *${when}* QSR:`, "");
+    for (const result of recipient.results) {
+      const { headline, detail } = describe(result);
+      const name = result.project?.name.trim() ?? result.configuredName;
+      const prodTag = result.inProduction ? " (in production)" : "";
+      lines.push(`*${name}*${prodTag} — ${headline}`);
+      for (const line of detail) lines.push(`    ${line}`);
+      lines.push("");
     }
   }
 
-  lines.push("", `Fill it in here: ${BASE_URL}/teams/projects/list`);
+  // Round 3 is the last nudge before the window closes, so say so plainly.
+  if (round === 3) {
+    lines.push("", "_This is the final reminder for this month._");
+  }
+
+  lines.push("", `${BASE_URL}/teams/projects/list`);
   lines.push("_Automated reminder. Reply here if something looks wrong._");
-  return lines.join("\n");
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n");
 }
 
 export function renderDigest(
@@ -115,7 +188,7 @@ export function renderDigest(
     `${counts["FILLED"] ?? 0}/${total} projects complete.`,
     "",
   ];
-  for (const status of ["MISSING", "PARTIAL", "INVALID", "UNKNOWN"]) {
+  for (const status of ["MISSING", "PARTIAL", "UNKNOWN"]) {
     const matching = results.filter((r) => r.evaluation.status === status);
     if (matching.length === 0) continue;
     lines.push(`*${STATUS_LABEL[status] ?? status}* (${matching.length}):`);

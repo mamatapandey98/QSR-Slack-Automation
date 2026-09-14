@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Runs the QSR reminder check every day at 10:00 local time.
+
+  The machine is on +0545, so 10:00 local is 10:00 NPT.
+
+  It fires daily rather than on the 1st/5th/10th because `--if-due` decides whether today is
+  actually a reminder day. That keeps the weekend-shift rule in one place (src/schedule.ts)
+  instead of duplicating it in launchd, which cannot express "next working day" anyway.
+  On any non-reminder day the run exits within seconds having done nothing.
+
+  Install:
+    cp scripts/com.leapfrog.qsr-reminder.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.leapfrog.qsr-reminder.plist
+
+  Check / remove:
+    launchctl list | grep qsr
+    launchctl unload ~/Library/LaunchAgents/com.leapfrog.qsr-reminder.plist
+
+  NOTE: replace __REPO__ with the absolute repo path and __NODE__ with `which node`.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.leapfrog.qsr-reminder</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__NODE__</string>
+        <string>--env-file-if-exists=__REPO__/.env</string>
+        <string>__REPO__/src/cli/run.ts</string>
+        <string>--if-due</string>
+        <string>--send</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__REPO__</string>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>10</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>__REPO__/out/scheduler.log</string>
+    <key>StandardErrorPath</key>
+    <string>__REPO__/out/scheduler.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

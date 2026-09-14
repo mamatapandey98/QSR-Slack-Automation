@@ -8,7 +8,9 @@
     "node": ">=22.18"
   },
   "scripts": {
+    "setup": "node --env-file-if-exists=.env src/cli/setup.ts",
     "discover": "node --env-file-if-exists=.env src/cli/discover.ts",
+    "session": "node --env-file-if-exists=.env src/cli/session.ts",
     "start": "node --env-file-if-exists=.env src/cli/run.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --test --experimental-strip-types test/*.test.ts"
