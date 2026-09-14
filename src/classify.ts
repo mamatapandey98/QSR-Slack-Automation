@@ -45,7 +45,7 @@ export function classify(
     // A configured project missing from Vyaguta is a config problem, not compliance data.
     // Surface it as UNKNOWN so it is visible rather than silently passing.
     const evaluation: Evaluation = project
-      ? evaluate(entry, cfg.requiredSections ?? ALL_SECTIONS)
+      ? evaluate(entry, cfg.requiredSections ?? ALL_SECTIONS, cfg.inProduction)
       : {
           status: "UNKNOWN",
           reason: "NOT_FOUND",

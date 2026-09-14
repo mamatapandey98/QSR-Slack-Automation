@@ -25,7 +25,8 @@
     {
       "name": "Amazon-TeleGeography",
       "id": 315,
-      "leaderForReference": "sandriyamalla@lftechnology.com"
+      "leaderForReference": "sandriyamalla@lftechnology.com",
+      "inProduction": true
     },
     {
       "name": "Avia Healthcare Innovation",
@@ -55,17 +56,20 @@
       "leaderForReference": "ritumaharjan@lftechnology.com",
       "requiredSections": [
         "QA"
-      ]
+      ],
+      "inProduction": true
     },
     {
       "name": "Colla Health",
       "id": 366,
-      "leaderForReference": "krishudhakal@lftechnology.com"
+      "leaderForReference": "krishudhakal@lftechnology.com",
+      "inProduction": true
     },
     {
       "name": "DocVocate",
       "id": 186,
-      "leaderForReference": "shuvamdhakal@lftechnology.com"
+      "leaderForReference": "shuvamdhakal@lftechnology.com",
+      "inProduction": true
     },
     {
       "name": "Eduphoric-RDH (Regional Data Hub)",
@@ -79,7 +83,8 @@
     {
       "name": "Evoke Medical Care",
       "id": 288,
-      "leaderForReference": "santoshadhikari@lftechnology.com"
+      "leaderForReference": "santoshadhikari@lftechnology.com",
+      "inProduction": true
     },
     {
       "name": "Farmers Edge",
@@ -90,7 +95,8 @@
     {
       "name": "First Help Financial",
       "id": 3,
-      "leaderForReference": "pratigyabasnet@lftechnology.com"
+      "leaderForReference": "pratigyabasnet@lftechnology.com",
+      "inProduction": true
     },
     {
       "name": "Fujifilm Sonosite",
@@ -117,7 +123,8 @@
     {
       "name": "Inpart Assess",
       "id": 388,
-      "leaderForReference": "sahajaphuyal@lftechnology.com"
+      "leaderForReference": "sahajaphuyal@lftechnology.com",
+      "inProduction": true
     },
     {
       "name": "Inpart Data ",
@@ -160,7 +167,8 @@
       "leaderForReference": "ypradhan@lftechnology.com",
       "requiredSections": [
         "QA"
-      ]
+      ],
+      "inProduction": true
     },
     {
       "name": "League",
@@ -207,7 +215,8 @@
     {
       "name": "Ping Identity",
       "id": 42,
-      "leaderForReference": "aarjanrajlawot@lftechnology.com"
+      "leaderForReference": "aarjanrajlawot@lftechnology.com",
+      "inProduction": true
     },
     {
       "name": "Power Electronics",
@@ -223,7 +232,8 @@
     {
       "name": "Second Look (Mend.AI)",
       "id": 350,
-      "leaderForReference": "pratigyathapa@lftechnology.com"
+      "leaderForReference": "pratigyathapa@lftechnology.com",
+      "inProduction": true
     },
     {
       "name": "Security and Compliance",
@@ -234,7 +244,8 @@
     {
       "name": "Signetic",
       "id": 231,
-      "leaderForReference": "sunamratasubba@lftechnology.com"
+      "leaderForReference": "sunamratasubba@lftechnology.com",
+      "inProduction": true
     },
     {
       "name": "Soliish",
@@ -272,7 +283,8 @@
       "requiredSections": [
         "Code Quality",
         "QA"
-      ]
+      ],
+      "inProduction": true
     },
     {
       "name": "Vyaguta",

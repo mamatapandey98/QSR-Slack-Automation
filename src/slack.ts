@@ -94,20 +94,37 @@ function describe(result: ProjectResult): { headline: string; detail: string[] }
   switch (reason) {
     case "NOT_STARTED":
       return { headline: "not started", detail: ["Could you create and publish it?"] };
-    case "DRAFT_UNPUBLISHED":
+    case "DRAFT_UNPUBLISHED": {
+      const extra = result.evaluation.issues.filter(
+        (i) => !i.includes("All sections are marked done"),
+      );
       return {
         headline: "draft, not published",
-        detail: ["Everything is marked done — it just needs publishing."],
+        detail: [
+          "Everything is marked done — it just needs publishing.",
+          ...extra.map((i) => `• ${i}`),
+        ],
       };
-    case "DRAFT_SECTIONS_PENDING":
+    }
+    case "DRAFT_SECTIONS_PENDING": {
+      const extra = result.evaluation.issues.filter((i) => !i.startsWith("Still a draft"));
       return {
         headline: "still a draft",
-        detail: [`Still to be marked done: ${pendingSections.join(", ")}`],
+        detail: [
+          `Still to be marked done: ${pendingSections.join(", ")}`,
+          ...extra.map((i) => `• ${i}`),
+        ],
       };
+    }
     case "PUBLISHED_DATA_MISSING":
       return {
         headline: "published, but some metrics are empty",
         detail: [`Empty: ${missingFields.join(", ")}`],
+      };
+    case "QA_DATA_INVALID":
+      return {
+        headline: "published, but QA defect data has calculation errors",
+        detail: result.evaluation.issues.map((i) => `• ${i}`),
       };
     default:
       return { headline: STATUS_LABEL[result.evaluation.status] ?? "needs attention", detail: [] };

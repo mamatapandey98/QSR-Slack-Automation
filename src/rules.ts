@@ -14,6 +14,7 @@
  * `requiredSections` in config/projects.json).
  */
 import { ALL_SECTIONS, sectionHasContent, type Qsr, type SectionName } from "./vyaguta.ts";
+import { validateQaMetrics } from "./qa-rules.ts";
 
 export type QsrStatus =
   /** Published, with content in every section this project is expected to report. */
@@ -37,6 +38,8 @@ export type Reason =
   | "DRAFT_UNPUBLISHED"
   /** Published, but an expected section has no data. */
   | "PUBLISHED_DATA_MISSING"
+  /** Published, but QA defect metrics have mathematical or logical errors. */
+  | "QA_DATA_INVALID"
   | "COMPLETE"
   | "NOT_FOUND";
 
@@ -53,6 +56,7 @@ export type Evaluation = {
 export function evaluate(
   entry: Qsr | undefined,
   requiredSections: SectionName[] = ALL_SECTIONS,
+  inProduction?: boolean,
 ): Evaluation {
   if (!entry) {
     return {
@@ -67,15 +71,23 @@ export function evaluate(
   const isPublished = entry.status?.toUpperCase() === "PUBLISHED";
   const issues: string[] = [];
 
+  const qaValidation =
+    requiredSections.includes("QA") && sectionHasContent(entry, "QA")
+      ? validateQaMetrics(entry, inProduction)
+      : { valid: true, issues: [] };
+
   if (!isPublished) {
     // Unpublished is incomplete regardless of content. Report which sections are still
     // unticked, since that is what actually blocks publishing.
     const unticked = ALL_SECTIONS.filter((section) => !isMarkedDone(entry, section));
-    issues.push(
-      unticked.length > 0
-        ? `Still a draft — not yet marked done: ${unticked.join(", ")}`
-        : "All sections are marked done, but the report has not been published yet",
-    );
+    if (unticked.length > 0) {
+      issues.push(`Still a draft — not yet marked done: ${unticked.join(", ")}`);
+    } else {
+      issues.push("All sections are marked done, but the report has not been published yet");
+    }
+    if (!qaValidation.valid) {
+      issues.push(...qaValidation.issues);
+    }
     return {
       status: "PARTIAL",
       reason: unticked.length > 0 ? "DRAFT_SECTIONS_PENDING" : "DRAFT_UNPUBLISHED",
@@ -98,6 +110,17 @@ export function evaluate(
       issues,
     };
   }
+
+  if (!qaValidation.valid) {
+    return {
+      status: "PARTIAL",
+      reason: "QA_DATA_INVALID",
+      missingFields: [],
+      pendingSections: [],
+      issues: qaValidation.issues,
+    };
+  }
+
   return {
     status: "FILLED",
     reason: "COMPLETE",

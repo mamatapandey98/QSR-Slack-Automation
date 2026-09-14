@@ -39,6 +39,13 @@ function qsr(overrides: Partial<Qsr> & Record<string, unknown> = {}): Qsr {
     testCoverage: 81,
     codeSmells: 4,
     postProductionBugCount: 2,
+    softwareDefectTotalBugCount: 10,
+    defectRemovalEfficiency: 80,
+    defectLeakageRatio: 20,
+    criticalCount: 0,
+    majorCount: 0,
+    minorCount: 2,
+    bugSeverityTotalBugCount: 2,
     bsi: 1,
     ...overrides,
   } as Qsr;
@@ -69,6 +76,14 @@ test("a published report with an empty expected section is PARTIAL", () => {
   const { status, missingFields } = evaluate(withoutSection("QA"));
   assert.equal(status, "PARTIAL");
   assert.deepEqual(missingFields, ["QA metrics"]);
+});
+
+test("a published report with QA calculation errors is PARTIAL with reason QA_DATA_INVALID", () => {
+  const badQsr = qsr({ postProductionBugCount: 2, bugSeverityTotalBugCount: 3 });
+  const evalResult = evaluate(badQsr);
+  assert.equal(evalResult.status, "PARTIAL");
+  assert.equal(evalResult.reason, "QA_DATA_INVALID");
+  assert.match(evalResult.issues[0] ?? "", /Post Production Bug Count/);
 });
 
 test("sign-off flags alone never make a report complete (the Laudio case)", () => {

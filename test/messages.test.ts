@@ -76,6 +76,19 @@ test("published-but-empty message names the empty metrics", () => {
   assert.match(text, /Empty: Engineering metrics/);
 });
 
+test("published-with-qa-errors message lists the specific calculation errors", () => {
+  const text = renderMessage(
+    to([
+      result("Colla Health", "QA_DATA_INVALID", {
+        issues: ["Post Production Bug Count (2) does not match Total Bugs Count in severity section (3)"],
+      }),
+    ]),
+    "2026-08",
+  );
+  assert.match(text, /published, but QA defect data has calculation errors/);
+  assert.match(text, /Post Production Bug Count \(2\) does not match Total Bugs Count/);
+});
+
 test("several projects for one person are grouped into a single message", () => {
   const text = renderMessage(
     to([
