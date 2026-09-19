@@ -176,7 +176,7 @@ export function captureCredentials(
     };
 
     const onRequest = (req: Request): void => {
-      if (isApiRequest(req)) void finish(req);
+      if (isApiRequest(req) && req.headers()["authorization"]) void finish(req);
     };
 
     const timer = setTimeout(() => void finish(null), timeoutMs);
@@ -195,15 +195,86 @@ export async function primeSession(context: BrowserContext): Promise<string> {
   return page.url();
 }
 
+/** Calls the Vyaguta refresh endpoint and returns a new access token, or null on failure. */
+async function refreshAccessToken(refreshToken: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${BASE_URL}/api/core/auth/access-token`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ refreshToken }),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { data?: { accessToken?: string } };
+    return body?.data?.accessToken ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Builds a session from VYAGUTA_ACCESS_TOKEN / VYAGUTA_REFRESH_TOKEN env vars.
+ * If the access token is expired, uses the refresh token to obtain a new one automatically.
+ * This is the preferred path: no browser, no Google login required.
+ */
+async function sessionFromEnvCookies(): Promise<VyagutaSession | null> {
+  const accessToken = process.env.VYAGUTA_ACCESS_TOKEN?.trim();
+  const refreshToken = process.env.VYAGUTA_REFRESH_TOKEN?.trim();
+  if (!accessToken && !refreshToken) return null;
+
+  let resolvedAccessToken = accessToken ?? "";
+  const expiry = accessToken ? jwtExpiry(`Bearer ${accessToken}`) : undefined;
+  const isExpired = !expiry || expiry.getTime() - Date.now() < 120_000;
+
+  if (isExpired && refreshToken) {
+    console.log("Access token expired — refreshing using VYAGUTA_REFRESH_TOKEN…");
+    const newToken = await refreshAccessToken(refreshToken);
+    if (newToken) {
+      resolvedAccessToken = newToken;
+      console.log("Access token refreshed successfully.");
+    } else {
+      console.warn(
+        "Failed to refresh access token. Re-paste both tokens from DevTools and update .env.",
+      );
+      return null;
+    }
+  } else if (isExpired) {
+    console.warn(
+      "VYAGUTA_ACCESS_TOKEN is expired and no VYAGUTA_REFRESH_TOKEN is set.\n" +
+        "Re-paste both tokens from DevTools (Application tab → Cookies) and update .env.",
+    );
+    return null;
+  }
+
+  const resolvedExpiry = jwtExpiry(`Bearer ${resolvedAccessToken}`);
+  const cookieParts = [`access_token=${resolvedAccessToken}`];
+  if (refreshToken) cookieParts.push(`refresh_token=${refreshToken}`);
+
+  return {
+    authorization: undefined,
+    cookie: cookieParts.join("; "),
+    extraHeaders: {},
+    expiresAt: resolvedExpiry?.toISOString(),
+    capturedAt: new Date().toISOString(),
+    capturedFrom: "env:VYAGUTA_ACCESS_TOKEN",
+  };
+}
+
 /**
  * Returns usable credentials, in order of preference:
- *   1. the cached token, if still valid — no browser at all
- *   2. a headless load of the saved profile — no interaction
- *   3. an error telling you to run `npm run setup`
+ *   1. VYAGUTA_ACCESS_TOKEN / VYAGUTA_REFRESH_TOKEN env vars — no browser at all
+ *   2. the cached token, if still valid — no browser at all
+ *   3. a headless load of the saved profile — no interaction
+ *   4. an error telling you to run `npm run setup`
  */
 export async function getSession(
   options: { forceLogin?: boolean } = {},
 ): Promise<VyagutaSession> {
+  const envSession = await sessionFromEnvCookies();
+  if (envSession) {
+    console.log(`Using cookie credentials from env (${describeSession(envSession)}).`);
+    return envSession;
+  }
+
   if (!options.forceLogin) {
     const cached = loadCachedSession();
     if (cached) {
@@ -213,7 +284,10 @@ export async function getSession(
   }
 
   if (!existsSync(PROFILE_DIR)) {
-    throw new Error("No saved browser profile. Run `npm run setup` first.");
+    throw new Error(
+      "No VYAGUTA_ACCESS_TOKEN in .env and no saved browser profile.\n" +
+        "Either set VYAGUTA_ACCESS_TOKEN + VYAGUTA_REFRESH_TOKEN (see .env.example) or run `npm run setup`.",
+    );
   }
 
   console.log("Cached token is stale — refreshing from the saved browser profile…");
@@ -225,7 +299,7 @@ export async function getSession(
     if (!session) {
       throw new Error(
         "The saved browser profile is no longer signed in to Vyaguta.\n" +
-          "Run `npm run setup` to sign in again.",
+          "Either set VYAGUTA_ACCESS_TOKEN + VYAGUTA_REFRESH_TOKEN (see .env.example) or run `npm run setup` to sign in again.",
       );
     }
     saveSession(session);

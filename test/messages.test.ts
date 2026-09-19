@@ -37,22 +37,22 @@ const to = (results: ProjectResult[]): Recipient => ({
   results,
 });
 
-test("not-started message asks for the report to be created", () => {
+test("when a project report has not been started, the message asks to create and publish it", () => {
   const text = renderMessage(to([result("Inpart Nexus", "NOT_STARTED")]), "2026-08");
   assert.match(text, /August 2026/);
-  assert.match(text, /\*Inpart Nexus\* is not started/);
+  assert.match(text, /\*Inpart Nexus\* is not started/); 
   assert.match(text, /create and publish/);
   // Should not accuse someone of a half-done job when they never started.
   assert.doesNotMatch(text, /draft/i);
 });
 
-test("draft-with-everything-ticked message only asks for publishing", () => {
+test("when a report is a draft with all sections complete, the message only asks for publishing", () => {
   const text = renderMessage(to([result("Colla Health", "DRAFT_UNPUBLISHED")]), "2026-08");
   assert.match(text, /draft, not published/);
   assert.match(text, /just needs publishing/);
 });
 
-test("draft-with-pending-sections names those sections", () => {
+test("when a report is a draft with incomplete sections, the message lists which sections still need work", () => {
   const text = renderMessage(
     to([
       result("Second Look (Mend.AI)", "DRAFT_SECTIONS_PENDING", {
@@ -65,7 +65,7 @@ test("draft-with-pending-sections names those sections", () => {
   assert.match(text, /Still to be marked done: Engineering, Code Quality/);
 });
 
-test("published-but-empty message names the empty metrics", () => {
+test("when a report is published but has empty metrics, the message names which fields are missing", () => {
   const text = renderMessage(
     to([
       result("Laudio", "PUBLISHED_DATA_MISSING", { missingFields: ["Engineering metrics"] }),
@@ -76,7 +76,7 @@ test("published-but-empty message names the empty metrics", () => {
   assert.match(text, /Empty: Engineering metrics/);
 });
 
-test("published-with-qa-errors message lists the specific calculation errors", () => {
+test("when a published report has QA calculation errors, the message lists each specific error", () => {
   const text = renderMessage(
     to([
       result("Colla Health", "QA_DATA_INVALID", {
@@ -89,7 +89,7 @@ test("published-with-qa-errors message lists the specific calculation errors", (
   assert.match(text, /Post Production Bug Count \(2\) does not match Total Bugs Count/);
 });
 
-test("several projects for one person are grouped into a single message", () => {
+test("when one person owns multiple incomplete projects, they all appear in a single message", () => {
   const text = renderMessage(
     to([
       result("Colla Health", "DRAFT_UNPUBLISHED"),
@@ -104,12 +104,12 @@ test("several projects for one person are grouped into a single message", () => 
   assert.equal(text.match(/Hi!/g)?.length, 1);
 });
 
-test("in-production projects are tagged", () => {
+test("projects that are live in production are labeled as such in the message", () => {
   const text = renderMessage(to([result("Laudio", "NOT_STARTED", {}, true)]), "2026-08");
   assert.match(text, /\*Laudio\* \(in production\)/);
 });
 
-test("messages never contain blank-line runs", () => {
+test("the rendered message never contains multiple consecutive blank lines", () => {
   const text = renderMessage(
     to([result("A", "NOT_STARTED"), result("B", "DRAFT_UNPUBLISHED")]),
     "2026-08",

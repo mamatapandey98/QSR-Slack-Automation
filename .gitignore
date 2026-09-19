@@ -5,6 +5,11 @@ node_modules/
 
 # Secrets
 .env
+config/service-account.json
+config/qsr-automation-*.json
+
+# macOS
+.DS_Store
 
 # Generated output: dry-run reports, discovery captures, compliance reports.
 # Discovery captures can contain bearer tokens and personal data.

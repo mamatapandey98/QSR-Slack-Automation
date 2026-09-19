@@ -21,13 +21,13 @@ function baseQsr(overrides: Partial<Qsr> = {}): Qsr {
   } as Qsr;
 }
 
-test("valid QSR data passes with no issues", () => {
+test("when all QSR metrics are correctly filled in, validation passes with no issues", () => {
   const res = validateQaMetrics(baseQsr());
   assert.equal(res.valid, true);
   assert.equal(res.issues.length, 0);
 });
 
-test("Total Bugs Count (BSI section) must match Post Production Bug Count", () => {
+test("when the total bugs count in the severity section does not match the post-production bug count, validation fails with a mismatch error", () => {
   // Colla Health real regression case: postProd = 2, sevTotal = 3
   const res = validateQaMetrics(baseQsr({ postProductionBugCount: 2, bugSeverityTotalBugCount: 3 }));
   assert.equal(res.valid, false);
@@ -37,7 +37,7 @@ test("Total Bugs Count (BSI section) must match Post Production Bug Count", () =
   );
 });
 
-test("Severity counts sum must equal Total Bugs Count", () => {
+test("when the sum of critical, major, and minor counts does not equal the total bugs count, validation fails with a breakdown mismatch error", () => {
   // Inpart AI App real regression case: sevTotal = 3, but crit/maj/min are null (0)
   const res = validateQaMetrics(
     baseQsr({
@@ -55,7 +55,7 @@ test("Severity counts sum must equal Total Bugs Count", () => {
   );
 });
 
-test("Total Bug Count cannot be less than Post Production Bug Count", () => {
+test("when the total bug count is less than the post-production bug count, validation fails because post-production bugs cannot exceed total bugs", () => {
   const res = validateQaMetrics(
     baseQsr({ softwareDefectTotalBugCount: 2, postProductionBugCount: 5 }),
   );
@@ -66,7 +66,7 @@ test("Total Bug Count cannot be less than Post Production Bug Count", () => {
   );
 });
 
-test("DRE + DLR must add up to 100%", () => {
+test("when DRE and DLR do not add up to 100%, validation fails with a percentage sum error", () => {
   const res = validateQaMetrics(
     baseQsr({ defectRemovalEfficiency: 80, defectLeakageRatio: 10 }),
   );
@@ -77,7 +77,7 @@ test("DRE + DLR must add up to 100%", () => {
   );
 });
 
-test("Total Bug Count 0 requires DRE=100% and DLR=0%", () => {
+test("when there are zero total bugs but DRE is not 100% and DLR is not 0%, validation fails because zero-bug projects must reflect perfect defect removal", () => {
   // SuperCare Health real regression case: 0 bugs, DRE=0%, DLR=0%
   const res = validateQaMetrics(
     baseQsr({
@@ -99,7 +99,7 @@ test("Total Bug Count 0 requires DRE=100% and DLR=0%", () => {
   );
 });
 
-test("DLR formula verification catches bad math", () => {
+test("when the entered DLR does not match the value calculated from the bug counts, validation fails with the correct calculated value", () => {
   // 5 post-prod / 100 total = 5%, entered 15%
   const res = validateQaMetrics(
     baseQsr({ defectRemovalEfficiency: 85, defectLeakageRatio: 15 }),
@@ -111,7 +111,7 @@ test("DLR formula verification catches bad math", () => {
   );
 });
 
-test("DRE formula verification catches bad math", () => {
+test("when the entered DRE does not match the value calculated from the bug counts, validation fails with the correct calculated value", () => {
   // 95 pre-prod / 100 total = 95%, entered 85%
   const res = validateQaMetrics(
     baseQsr({ defectRemovalEfficiency: 85, defectLeakageRatio: 15 }),
@@ -123,7 +123,7 @@ test("DRE formula verification catches bad math", () => {
   );
 });
 
-test("BSI formula verification catches bad calculation", () => {
+test("when the entered BSI does not match the value calculated from severity counts, validation fails with the correct calculated value", () => {
   // 1 crit (3), 2 maj (4), 2 min (2) -> 9 / 5 = 1.8. Entered 2.5
   const res = validateQaMetrics(baseQsr({ bsi: 2.5 }));
   assert.equal(res.valid, false);
@@ -133,7 +133,7 @@ test("BSI formula verification catches bad calculation", () => {
   );
 });
 
-test("BSI when 0 post-production bugs should be 0", () => {
+test("when there are zero post-production bugs, the BSI must be 0 and validation fails if a non-zero value is entered", () => {
   const res = validateQaMetrics(
     baseQsr({
       postProductionBugCount: 0,
@@ -153,7 +153,7 @@ test("BSI when 0 post-production bugs should be 0", () => {
   );
 });
 
-test("Non-production project cannot have post-production bugs", () => {
+test("when a project is not in production but reports post-production bugs, validation fails because only live projects can have post-production defects", () => {
   const res = validateQaMetrics(baseQsr({ postProductionBugCount: 2 }), false);
   assert.equal(res.valid, false);
   assert.match(

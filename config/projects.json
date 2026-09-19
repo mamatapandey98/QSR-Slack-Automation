@@ -1,7 +1,6 @@
 {
   "_comment": [
-    "GENERATED STARTER. Delete the projects that do NOT owe a QSR.",
-    "Set inProduction true/false. Set ownerEmail only to override the project leader."
+    "Auto-generated from CSV. Do not edit by hand — re-run scripts/sync-projects.ts instead."
   ],
   "projects": [
     {
@@ -54,10 +53,10 @@
       "name": "BuildWitt General QA",
       "id": 425,
       "leaderForReference": "ritumaharjan@lftechnology.com",
+      "inProduction": true,
       "requiredSections": [
         "QA"
-      ],
-      "inProduction": true
+      ]
     },
     {
       "name": "Colla Health",
@@ -105,7 +104,7 @@
       "skip": true
     },
     {
-      "name": "FVC: Global to Global ",
+      "name": "FVC: Global to Global",
       "id": 411,
       "leaderForReference": "pragyagyawali@lftechnology.com"
     },
@@ -127,7 +126,7 @@
       "inProduction": true
     },
     {
-      "name": "Inpart Data ",
+      "name": "Inpart Data",
       "id": 434,
       "leaderForReference": "sahajaphuyal@lftechnology.com",
       "skip": true
@@ -165,10 +164,10 @@
       "name": "Laudio",
       "id": 14,
       "leaderForReference": "ypradhan@lftechnology.com",
+      "inProduction": true,
       "requiredSections": [
         "QA"
-      ],
-      "inProduction": true
+      ]
     },
     {
       "name": "League",
@@ -280,11 +279,11 @@
       "name": "Trayt.Health",
       "id": 185,
       "leaderForReference": "aakrititiwari@lftechnology.com",
+      "inProduction": true,
       "requiredSections": [
         "Code Quality",
         "QA"
-      ],
-      "inProduction": true
+      ]
     },
     {
       "name": "Vyaguta",

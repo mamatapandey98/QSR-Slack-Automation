@@ -8,6 +8,7 @@
     "node": ">=22.18"
   },
   "scripts": {
+    "sync": "node --experimental-strip-types scripts/sync-projects.ts",
     "setup": "node --env-file-if-exists=.env src/cli/setup.ts",
     "discover": "node --env-file-if-exists=.env src/cli/discover.ts",
     "session": "node --env-file-if-exists=.env src/cli/session.ts",
