@@ -250,7 +250,7 @@ async function sessionFromEnvCookies(): Promise<VyagutaSession | null> {
   if (refreshToken) cookieParts.push(`refresh_token=${refreshToken}`);
 
   return {
-    authorization: undefined,
+    authorization: `Bearer ${resolvedAccessToken}`,
     cookie: cookieParts.join("; "),
     extraHeaders: {},
     expiresAt: resolvedExpiry?.toISOString(),
